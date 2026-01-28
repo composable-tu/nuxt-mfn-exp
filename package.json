@@ -1,0 +1,20 @@
+{
+  "name": "nuxt-mfn-exp",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@lancedb/lancedb": "^0.23.0",
+    "@mediapipe/tasks-vision": "^0.10.32",
+    "nuxt": "^4.3.0",
+    "openvino-node": "^2025.4.0",
+    "vue": "^3.5.27",
+    "vue-router": "^4.6.4"
+  }
+}
