@@ -24,14 +24,11 @@ export async function alignFace(imageBuffer: Buffer, srcPts: { x: number, y: num
     // 2. 使用 Sharp 进行图像处理
     // 注意：Sharp 的 affine 变换逻辑与 OpenCV 略有不同，
     // 我们可以通过组合 resize, rotate 和 extend 来实现，或者直接用其 affine 方法
-    return await sharp(imageBuffer)
-        .affine([a, b, c, d], {
-            idx: e,  // x 平移
-            idy: f,  // y 平移
-            background: {r: 255, g: 255, b: 255} // 白色背景
-        })
-        .resize(112, 112, {
-            fit: 'contain', background: {r: 255, g: 255, b: 255}
-        })
-        .toBuffer();
+    return await sharp(imageBuffer).affine([a, b, c, d], {
+        idx: e,  // x 平移
+        idy: f,  // y 平移
+        background: {r: 255, g: 255, b: 255} // 白色背景
+    }).resize(112, 112, {
+        fit: 'contain', background: {r: 255, g: 255, b: 255}
+    }).toBuffer();
 }

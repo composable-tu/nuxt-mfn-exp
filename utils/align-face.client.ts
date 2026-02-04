@@ -2,11 +2,11 @@ export async function detectFaceKeypoints(imageElement: HTMLImageElement) {
     const {FaceDetector, FilesetResolver} = await import('@mediapipe/tasks-vision');
 
     // 初始化检测器
-    const vision = await FilesetResolver.forVisionTasks("/models/mediapipe");
+    const vision = await FilesetResolver.forVisionTasks("models/mediapipe");
 
     const detector = await FaceDetector.createFromOptions(vision, {
         baseOptions: {
-            modelAssetPath: `/models/litert/blaze_face_short_range.tflite`, delegate: "GPU"
+            modelAssetPath: `models/litert/blaze_face_short_range.tflite`, delegate: "GPU"
         }, runningMode: "IMAGE"
     });
 
