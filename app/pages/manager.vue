@@ -7,8 +7,11 @@ import {Card, CardContent, CardHeader, CardTitle} from "~/components/ui/card";
 import {Field, FieldGroup, FieldLabel} from "~/components/ui/field";
 import {Input} from "~/components/ui/input";
 import {Tabs, TabsList, TabsTrigger} from "~/components/ui/tabs";
-import {Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose} from "~/components/ui/dialog";
+import {Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle, DialogTrigger} from "~/components/ui/dialog";
+import {Alert} from "~/components/ui/alert";
 import {detectFaceKeypoints} from "~~/utils/align-face.client";
+import {AlertCircleIcon} from 'lucide-vue-next'
+import {Spinner} from "~/components/ui/spinner";
 
 const props = defineProps<{
   class?: string;
@@ -256,7 +259,7 @@ onMounted(() => {
             <li
                 v-for="name in faceList"
                 :key="name"
-                class="flex items-center justify-between rounded-md border bg-card px-3 py-2"
+                class="flex items-center justify-between rounded-md border bg-card px-2 py-2"
             >
               <template v-if="editName === name">
                 <Input
@@ -266,8 +269,10 @@ onMounted(() => {
                     @keydown.enter="submitRename"
                     @keydown.escape="cancelRename"
                 />
-                <Button size="sm" variant="outline" @click="submitRename">确定</Button>
-                <Button size="sm" variant="ghost" @click="cancelRename">取消</Button>
+                <div class="flex gap-1">
+                  <Button size="sm" variant="outline" @click="submitRename">确定</Button>
+                  <Button size="sm" variant="outline" @click="cancelRename">取消</Button>
+                </div>
               </template>
               <template v-else>
                 <span class="font-medium">{{ name }}</span>
@@ -281,11 +286,11 @@ onMounted(() => {
         </div>
 
         <div class="border-t pt-4">
-          <h3 class="text-sm font-medium mb-2">新增人脸</h3>
+          <h3 class="text-sm font-medium mb-4">新增人脸</h3>
           <div class="flex flex-wrap gap-2">
             <Dialog v-model:open="uploadDialogOpen">
               <DialogTrigger as-child>
-                <Button type="button" variant="outline" @click="openUpload">
+                <Button type="button" @click="openUpload">
                   上传图片
                 </Button>
               </DialogTrigger>
@@ -307,16 +312,22 @@ onMounted(() => {
                       type="file"
                       @change="onFileSelected"
                   />
-                  <Button type="button" variant="secondary" class="w-full" @click="triggerFileSelect">
+                  <Button class="w-full" type="button" variant="secondary" @click="triggerFileSelect">
                     选择图片
                   </Button>
                   <div class="flex gap-2">
-                    <Button :disabled="adding" @click="submitUpload">确定</Button>
+                    <Button :disabled="adding" @click="submitUpload">
+                      <Spinner v-if="adding" class="animate-spin"/>
+                      添加
+                    </Button>
                     <DialogClose as-child>
                       <Button variant="outline">取消</Button>
                     </DialogClose>
                   </div>
-                  <p v-if="addError" class="text-destructive text-sm">{{ addError }}</p>
+                  <Alert v-if="addError" variant="destructive">
+                    <AlertCircleIcon/>
+                    <AlertTitle>{{ addError }}</AlertTitle>
+                  </Alert>
                 </div>
               </DialogContent>
             </Dialog>
@@ -348,12 +359,18 @@ onMounted(() => {
                     </Field>
                   </FieldGroup>
                   <div class="flex gap-2">
-                    <Button :disabled="adding" @click="captureAndAdd">拍照并添加</Button>
+                    <Button :disabled="adding" @click="captureAndAdd">
+                      <Spinner v-if="adding" class="animate-spin"/>
+                      拍照并添加
+                    </Button>
                     <DialogClose as-child>
                       <Button variant="outline">取消</Button>
                     </DialogClose>
                   </div>
-                  <p v-if="addError" class="text-destructive text-sm">{{ addError }}</p>
+                  <Alert v-if="addError" variant="destructive">
+                    <AlertCircleIcon/>
+                    <AlertTitle>{{ addError }}</AlertTitle>
+                  </Alert>
                 </div>
               </DialogContent>
             </Dialog>
