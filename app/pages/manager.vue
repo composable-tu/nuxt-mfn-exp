@@ -7,6 +7,7 @@ import {Card, CardContent, CardHeader, CardTitle} from "~/components/ui/card";
 import {Field, FieldGroup, FieldLabel} from "~/components/ui/field";
 import {Input} from "~/components/ui/input";
 import {Tabs, TabsList, TabsTrigger} from "~/components/ui/tabs";
+import {Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose} from "~/components/ui/dialog";
 import {detectFaceKeypoints} from "~~/utils/align-face.client";
 
 const props = defineProps<{
@@ -17,7 +18,6 @@ const router = useRouter();
 const faceList = ref<string[]>([]);
 const loading = ref(false);
 const newName = ref("");
-const addMode = ref<"idle" | "upload" | "camera">("idle");
 const uploadInputRef = ref<HTMLInputElement | null>(null);
 const videoRef = ref<HTMLVideoElement | null>(null);
 const streamRef = ref<MediaStream | null>(null);
@@ -26,6 +26,10 @@ const adding = ref(false);
 const addError = ref("");
 const editName = ref<string | null>(null);
 const editValue = ref("");
+const uploadDialogOpen = ref(false);
+const cameraDialogOpen = ref(false);
+const addMode = ref<"upload" | "camera">("upload");
+const selectedImageDataUrl = ref<string | null>(null);
 
 function handleTabChange(value: string) {
   if (value === "index") router.push("/");
@@ -111,6 +115,8 @@ function openUpload() {
   addMode.value = "upload";
   newName.value = "";
   addError.value = "";
+  selectedImageDataUrl.value = null;
+  uploadDialogOpen.value = true;
 }
 
 function triggerFileSelect() {
@@ -123,36 +129,47 @@ function onFileSelected(e: Event) {
   input.value = "";
   if (!file || !file.type.startsWith("image/")) {
     addError.value = "请选择图片文件";
+    selectedImageDataUrl.value = null;
     return;
   }
   const reader = new FileReader();
-  reader.onload = async () => {
-    const dataUrl = reader.result as string;
-    if (!newName.value.trim()) {
-      addError.value = "请输入姓名";
-      return;
-    }
-    adding.value = true;
+  reader.onload = () => {
+    selectedImageDataUrl.value = reader.result as string;
     addError.value = "";
-    try {
-      await addFaceFromImageData(dataUrl, newName.value);
-      await loadFaces();
-      addMode.value = "idle";
-      newName.value = "";
-    } catch (err) {
-      console.error(err);
-      addError.value = err instanceof Error ? err.message : "添加失败，请确保画面中有清晰人脸";
-    } finally {
-      adding.value = false;
-    }
   };
   reader.readAsDataURL(file);
+}
+
+async function submitUpload() {
+  if (!selectedImageDataUrl.value) {
+    addError.value = "请选择图片";
+    return;
+  }
+  if (!newName.value.trim()) {
+    addError.value = "请输入姓名";
+    return;
+  }
+  adding.value = true;
+  addError.value = "";
+  try {
+    await addFaceFromImageData(selectedImageDataUrl.value, newName.value);
+    await loadFaces();
+    uploadDialogOpen.value = false;
+    newName.value = "";
+    selectedImageDataUrl.value = null;
+  } catch (err) {
+    console.error(err);
+    addError.value = err instanceof Error ? err.message : "添加失败，请确保画面中有清晰人脸";
+  } finally {
+    adding.value = false;
+  }
 }
 
 async function startCameraCapture() {
   addMode.value = "camera";
   newName.value = "";
   addError.value = "";
+  cameraDialogOpen.value = true;
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {width: 640, height: 480, facingMode: "user"},
@@ -174,7 +191,7 @@ function stopCameraCapture() {
     streamRef.value = null;
   }
   if (videoRef.value) videoRef.value.srcObject = null;
-  addMode.value = "idle";
+  cameraDialogOpen.value = false;
 }
 
 async function captureAndAdd() {
@@ -265,66 +282,82 @@ onMounted(() => {
 
         <div class="border-t pt-4">
           <h3 class="text-sm font-medium mb-2">新增人脸</h3>
-          <div class="flex flex-wrap gap-2 mb-3">
-            <Button :disabled="addMode !== 'idle'" type="button" variant="outline" @click="openUpload">
-              上传图片
-            </Button>
-            <Button
-                :disabled="addMode !== 'idle'"
-                type="button"
-                variant="outline"
-                @click="startCameraCapture"
-            >
-              摄像头拍照
-            </Button>
+          <div class="flex flex-wrap gap-2">
+            <Dialog v-model:open="uploadDialogOpen">
+              <DialogTrigger as-child>
+                <Button type="button" variant="outline" @click="openUpload">
+                  上传图片
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>上传图片添加人脸</DialogTitle>
+                </DialogHeader>
+                <div class="space-y-4">
+                  <FieldGroup>
+                    <Field>
+                      <FieldLabel>姓名</FieldLabel>
+                      <Input v-model="newName" placeholder="输入姓名"/>
+                    </Field>
+                  </FieldGroup>
+                  <input
+                      ref="uploadInputRef"
+                      accept="image/*"
+                      class="hidden"
+                      type="file"
+                      @change="onFileSelected"
+                  />
+                  <Button type="button" variant="secondary" class="w-full" @click="triggerFileSelect">
+                    选择图片
+                  </Button>
+                  <div class="flex gap-2">
+                    <Button :disabled="adding" @click="submitUpload">确定</Button>
+                    <DialogClose as-child>
+                      <Button variant="outline">取消</Button>
+                    </DialogClose>
+                  </div>
+                  <p v-if="addError" class="text-destructive text-sm">{{ addError }}</p>
+                </div>
+              </DialogContent>
+            </Dialog>
+            <Dialog v-model:open="cameraDialogOpen">
+              <DialogTrigger as-child>
+                <Button type="button" variant="outline" @click="startCameraCapture">
+                  摄像头拍照
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>摄像头拍照添加人脸</DialogTitle>
+                </DialogHeader>
+                <div class="space-y-4">
+                  <div class="rounded-lg overflow-hidden bg-muted w-full max-w-xs aspect-video mx-auto">
+                    <video
+                        ref="videoRef"
+                        autoplay
+                        class="w-full h-full object-cover"
+                        muted
+                        playsinline
+                    />
+                  </div>
+                  <canvas ref="captureCanvasRef" class="hidden"/>
+                  <FieldGroup>
+                    <Field>
+                      <FieldLabel>姓名</FieldLabel>
+                      <Input v-model="newName" placeholder="输入姓名"/>
+                    </Field>
+                  </FieldGroup>
+                  <div class="flex gap-2">
+                    <Button :disabled="adding" @click="captureAndAdd">拍照并添加</Button>
+                    <DialogClose as-child>
+                      <Button variant="outline">取消</Button>
+                    </DialogClose>
+                  </div>
+                  <p v-if="addError" class="text-destructive text-sm">{{ addError }}</p>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
-          <input
-              ref="uploadInputRef"
-              accept="image/*"
-              class="hidden"
-              type="file"
-              @change="onFileSelected"
-          />
-
-          <!-- 上传模式：输入姓名后选择图片 -->
-          <div v-if="addMode === 'upload'" class="space-y-2">
-            <FieldGroup>
-              <Field>
-                <FieldLabel>姓名</FieldLabel>
-                <Input v-model="newName" placeholder="输入姓名"/>
-              </Field>
-            </FieldGroup>
-            <Button type="button" variant="secondary" @click="triggerFileSelect">
-              选择图片
-            </Button>
-            <p class="text-muted-foreground text-sm">先输入姓名，再选择含有人脸的图片。</p>
-          </div>
-
-          <!-- 摄像头模式 -->
-          <div v-if="addMode === 'camera'" class="space-y-3">
-            <div class="rounded-lg overflow-hidden bg-muted w-full max-w-xs aspect-video">
-              <video
-                  ref="videoRef"
-                  autoplay
-                  class="w-full h-full object-cover"
-                  muted
-                  playsinline
-              />
-            </div>
-            <canvas ref="captureCanvasRef" class="hidden"/>
-            <FieldGroup>
-              <Field>
-                <FieldLabel>姓名</FieldLabel>
-                <Input v-model="newName" placeholder="输入姓名"/>
-              </Field>
-            </FieldGroup>
-            <div class="flex gap-2">
-              <Button :disabled="adding" @click="captureAndAdd">拍照并添加</Button>
-              <Button variant="outline" @click="stopCameraCapture">取消</Button>
-            </div>
-          </div>
-
-          <p v-if="addError" class="text-destructive text-sm">{{ addError }}</p>
         </div>
       </CardContent>
     </Card>
