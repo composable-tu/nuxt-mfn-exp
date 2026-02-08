@@ -16,8 +16,8 @@ import { useRouter } from '#vue-router'
 const router = useRouter()
 
 const handleTabChange = (value: string) => {
-  if (value === 'signup') {
-    router.push('/signup')
+  if (value === '') {
+    router.push('/')
   }
 }
 </script>
@@ -27,13 +27,13 @@ const handleTabChange = (value: string) => {
     <Card>
       <CardHeader class="text-center">
         <CardTitle class="text-xl">
-          <Tabs default-value="index" :modelValue="'index'" class="w-full self-center">
+          <Tabs default-value="signup" :modelValue="'signup'" class="w-full self-center">
             <div class="flex justify-center">
               <TabsList>
-                <TabsTrigger value="index">
+                <TabsTrigger value="index" @click="handleTabChange('')">
                   首页
                 </TabsTrigger>
-                <TabsTrigger value="signup" @click="handleTabChange('signup')">
+                <TabsTrigger value="signup">
                   注册人脸
                 </TabsTrigger>
               </TabsList>
