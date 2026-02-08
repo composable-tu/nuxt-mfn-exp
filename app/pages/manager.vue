@@ -27,14 +27,14 @@ const handleTabChange = (value: string) => {
     <Card>
       <CardHeader class="text-center">
         <CardTitle class="text-xl">
-          <Tabs default-value="signup" :modelValue="'signup'" class="w-full self-center">
+          <Tabs default-value="manager" :modelValue="'manager'" class="w-full self-center">
             <div class="flex justify-center">
               <TabsList>
                 <TabsTrigger value="index" @click="handleTabChange('')">
-                  首页
+                  身份识别
                 </TabsTrigger>
-                <TabsTrigger value="signup">
-                  注册人脸
+                <TabsTrigger value="manager">
+                  身份管理
                 </TabsTrigger>
               </TabsList>
             </div>
