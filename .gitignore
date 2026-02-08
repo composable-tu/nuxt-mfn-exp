@@ -24,3 +24,5 @@ logs
 !.env.example
 test**.js
 test**.ts
+/data
+!/data/.gitkeep

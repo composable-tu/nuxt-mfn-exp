@@ -1,25 +1,102 @@
 <script lang="ts" setup>
-import type {HTMLAttributes} from "vue"
-import {cn} from "~/lib/utils"
-import {Button} from '~/components/ui/button'
-import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '~/components/ui/card'
-import {Field, FieldDescription, FieldGroup, FieldLabel, FieldSeparator} from '~/components/ui/field'
-import {Input} from '~/components/ui/input'
+import {onUnmounted, ref} from "vue";
+import {useRouter} from "vue-router";
+import {cn} from "~/lib/utils";
+import {Button} from "~/components/ui/button";
+import {Card, CardContent, CardHeader, CardTitle} from "~/components/ui/card";
 import {Tabs, TabsList, TabsTrigger} from "~/components/ui/tabs";
+import {detectFaceKeypoints} from "~~/utils/align-face.client";
 
 const props = defineProps<{
-  class?: HTMLAttributes["class"]
-}>()
+  class?: string;
+}>();
 
-import { useRouter } from '#vue-router'
+const router = useRouter();
+const videoRef = ref<HTMLVideoElement | null>(null);
+const canvasRef = ref<HTMLCanvasElement | null>(null);
+const streamRef = ref<MediaStream | null>(null);
+const isCameraOn = ref(false);
+const recognizeResult = ref<string | null>(null);
+const recognizing = ref(false);
+let recognizeTimer: ReturnType<typeof setInterval> | null = null;
 
-const router = useRouter()
+function handleTabChange(value: string) {
+  if (value === "manager") router.push("/manager");
+}
 
-const handleTabChange = (value: string) => {
-  if (value === 'manager') {
-    router.push('/manager')
+async function startCamera() {
+  if (streamRef.value) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {width: 640, height: 480, facingMode: "user"},
+    });
+    streamRef.value = stream;
+    if (videoRef.value) {
+      videoRef.value.srcObject = stream;
+      await videoRef.value.play();
+    }
+    isCameraOn.value = true;
+    recognizeResult.value = null;
+    startRecognizeLoop();
+  } catch (e) {
+    console.error(e);
+    recognizeResult.value = "无法打开摄像头";
   }
 }
+
+function stopCamera() {
+  if (recognizeTimer) {
+    clearInterval(recognizeTimer);
+    recognizeTimer = null;
+  }
+  if (streamRef.value) {
+    streamRef.value.getTracks().forEach((t) => t.stop());
+    streamRef.value = null;
+  }
+  if (videoRef.value) videoRef.value.srcObject = null;
+  isCameraOn.value = false;
+  recognizeResult.value = null;
+}
+
+function startRecognizeLoop() {
+  if (recognizeTimer) return;
+  recognizeTimer = setInterval(async () => {
+    if (!videoRef.value || !canvasRef.value || recognizing.value || !streamRef.value) return;
+    const video = videoRef.value;
+    if (video.readyState < 2) return;
+    const canvas = canvasRef.value;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    try {
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("image load error"));
+        img.src = dataUrl;
+      });
+      const keypoints = await detectFaceKeypoints(img);
+      recognizing.value = true;
+      const {name} = await $fetch<{ name: string | null }>("/api/faces/recognize", {
+        method: "POST",
+        body: {image: dataUrl, keypoints},
+      });
+      recognizeResult.value = name ?? "未识别";
+    } catch {
+      recognizeResult.value = "未检测到人脸";
+    } finally {
+      recognizing.value = false;
+    }
+  }, 800);
+}
+
+onUnmounted(() => {
+  stopCamera();
+});
 </script>
 
 <template>
@@ -27,12 +104,10 @@ const handleTabChange = (value: string) => {
     <Card>
       <CardHeader class="text-center">
         <CardTitle class="text-xl">
-          <Tabs default-value="index" :modelValue="'index'" class="w-full self-center">
+          <Tabs class="w-full self-center" default-value="index" model-value="index">
             <div class="flex justify-center">
               <TabsList>
-                <TabsTrigger value="index">
-                  身份识别
-                </TabsTrigger>
+                <TabsTrigger value="index">身份识别</TabsTrigger>
                 <TabsTrigger value="manager" @click="handleTabChange('manager')">
                   身份管理
                 </TabsTrigger>
@@ -41,70 +116,48 @@ const handleTabChange = (value: string) => {
           </Tabs>
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <form>
-          <FieldGroup>
-            <Field>
-              <Button type="button" variant="outline">
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                      d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"
-                      fill="currentColor"
-                  />
-                </svg>
-                Login with Apple
-              </Button>
-              <Button type="button" variant="outline">
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                      d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"
-                      fill="currentColor"
-                  />
-                </svg>
-                Login with Google
-              </Button>
-            </Field>
-            <FieldSeparator class="*:data-[slot=field-separator-content]:bg-card">
-              Or continue with
-            </FieldSeparator>
-            <Field>
-              <FieldLabel for="email">
-                Email
-              </FieldLabel>
-              <Input
-                  id="email"
-                  placeholder="m@example.com"
-                  required
-                  type="email"
-              />
-            </Field>
-            <Field>
-              <div class="flex items-center">
-                <FieldLabel for="password">
-                  Password
-                </FieldLabel>
-                <a
-                    class="ml-auto text-sm underline-offset-4 hover:underline"
-                    href="#"
-                >
-                  Forgot your password?
-                </a>
-              </div>
-              <Input id="password" required type="password"/>
-            </Field>
-            <Field>
-              <Button type="submit">
-                Login
-              </Button>
-              <FieldDescription class="text-center">
-                Don't have an account?
-                <a href="#">
-                  Sign up
-                </a>
-              </FieldDescription>
-            </Field>
-          </FieldGroup>
-        </form>
+      <CardContent class="flex flex-col items-center gap-4">
+        <div
+            class="relative rounded-lg overflow-hidden bg-muted w-full max-w-md aspect-video flex items-center justify-center">
+          <video
+              v-show="isCameraOn"
+              ref="videoRef"
+              autoplay
+              class="w-full h-full object-cover"
+              muted
+              playsinline
+          />
+          <canvas ref="canvasRef" class="hidden"/>
+          <div
+              v-if="!isCameraOn"
+              class="text-muted-foreground text-sm"
+          >
+            点击「开启摄像头」开始识别
+          </div>
+          <div
+              v-if="isCameraOn && recognizeResult"
+              class="absolute bottom-2 left-0 right-0 text-center"
+          >
+            <span
+                :class="
+                recognizeResult === '未识别' || recognizeResult === '未检测到人脸'
+                  ? 'bg-muted text-muted-foreground'
+                  : 'bg-primary text-primary-foreground'
+              "
+                class="inline-block px-3 py-1 rounded-md text-sm font-medium"
+            >
+              {{ recognizeResult }}
+            </span>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <Button v-if="!isCameraOn" type="button" @click="startCamera">
+            开启摄像头
+          </Button>
+          <Button v-else type="button" variant="outline" @click="stopCamera">
+            关闭摄像头
+          </Button>
+        </div>
       </CardContent>
     </Card>
   </div>

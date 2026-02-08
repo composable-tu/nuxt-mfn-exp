@@ -15,8 +15,8 @@ import {ScanFace} from "lucide-vue-next"
       </a>
       <NuxtPage/>
     </div>
-    <FieldDescription class="px-6 text-center">
+    <p class="px-6 text-center text-muted-foreground text-sm">
       网站仅供演示使用，版权归相关权利人所有
-    </FieldDescription>
+    </p>
   </div>
 </template>

@@ -1,34 +1,80 @@
-import * as nudged from 'nudged';
-import * as sharp from 'sharp';
+import sharp from 'sharp';
+import {cv} from 'opencv-wasm';
 
-const REFERENCE_PTS = [{x: 38.2946, y: 51.6963}, // 左眼
-    {x: 73.5318, y: 51.5014}, // 右眼
-    {x: 56.0252, y: 71.7366}, // 鼻尖
-    {x: 56.1396, y: 92.2048}  // 嘴中心
-];
+const REFERENCE_PTS = [[38.2946, 51.6963], [73.5318, 51.5014], [56.0252, 71.7366], [56.1396, 92.2048]];
 
-export async function alignFace(imageBuffer: Buffer, srcPts: { x: number, y: number }[]) {
-    // 1. 计算变换矩阵
-    // nudged.estimate 对应 OpenCV 的 estimateAffinePartial2D (相似变换: 旋转+缩放+平移)
-    const transform = nudged.estimate({
-        estimator: 'SRT', // SRT 表示 Similarity (相似变换: 缩放+旋转+平移)
-        domain: srcPts,   // 源点集
-        range: REFERENCE_PTS  // 目标点集
+const OUT_SIZE = 112;
+
+function getSimilarityTransformMatrix(srcPts: { x: number; y: number }[]) {
+    const n = 4;
+    let srcMean = {x: 0, y: 0};
+    let dstMean = {x: 0, y: 0};
+
+    for (let i = 0; i < n; i++) {
+        srcMean.x += srcPts[i].x;
+        srcMean.y += srcPts[i].y;
+        dstMean.x += REFERENCE_PTS[i][0];
+        dstMean.y += REFERENCE_PTS[i][1];
+    }
+    srcMean.x /= n;
+    srcMean.y /= n;
+    dstMean.x /= n;
+    dstMean.y /= n;
+
+    let sum_xx_yy = 0;
+    let sum_ux_vy = 0;
+    let sum_vx_uy = 0;
+
+    for (let i = 0; i < n; i++) {
+        const sx = srcPts[i].x - srcMean.x;
+        const sy = srcPts[i].y - srcMean.y;
+        const dx = REFERENCE_PTS[i][0] - dstMean.x;
+        const dy = REFERENCE_PTS[i][1] - dstMean.y;
+
+        sum_xx_yy += sx * sx + sy * sy;
+        sum_ux_vy += sx * dx + sy * dy;
+        sum_vx_uy += sx * dy - sy * dx;
+    }
+
+    const a = sum_ux_vy / sum_xx_yy;
+    const b = sum_vx_uy / sum_xx_yy;
+
+    const tx = dstMean.x - (a * srcMean.x - b * srcMean.y);
+    const ty = dstMean.y - (b * srcMean.x + a * srcMean.y);
+
+    return [a, -b, tx, b, a, ty];
+}
+
+export async function alignFace(imageBuffer: Buffer, srcPts: { x: number; y: number }[]) {
+    const {data, info} = await sharp(imageBuffer)
+        .ensureAlpha()
+        .raw()
+        .toBuffer({resolveWithObject: true});
+
+    const srcMat = cv.matFromImageData({
+        data: new Uint8ClampedArray(data), width: info.width, height: info.height,
     });
 
-    // 提取矩阵参数用于 sharp 的 affine 变换
-    // sharp 的 affine 接受 [a, b, c, d] 矩阵
-    const matrix = nudged.transform.toMatrix(transform);
-    const {a, b, c, d, e, f} = matrix;
+    const mArray = getSimilarityTransformMatrix(srcPts);
+    const M = cv.matFromArray(2, 3, cv.CV_64F, mArray);
 
-    // 2. 使用 Sharp 进行图像处理
-    // 注意：Sharp 的 affine 变换逻辑与 OpenCV 略有不同，
-    // 我们可以通过组合 resize, rotate 和 extend 来实现，或者直接用其 affine 方法
-    return await sharp(imageBuffer).affine([a, b, c, d], {
-        idx: e,  // x 平移
-        idy: f,  // y 平移
-        background: {r: 255, g: 255, b: 255} // 白色背景
-    }).resize(112, 112, {
-        fit: 'contain', background: {r: 255, g: 255, b: 255}
-    }).toBuffer();
+    const dstMat = new cv.Mat();
+    const dsize = new cv.Size(OUT_SIZE, OUT_SIZE);
+
+    cv.warpAffine(srcMat, dstMat, M, dsize, cv.INTER_CUBIC, cv.BORDER_REPLICATE);
+
+    const resultRaw = Buffer.from(dstMat.data);
+    const resultBuffer = await sharp(resultRaw, {
+        raw: {
+            width: OUT_SIZE, height: OUT_SIZE, channels: 4
+        }
+    })
+        .png()
+        .toBuffer();
+
+    srcMat.delete();
+    M.delete();
+    dstMat.delete();
+
+    return resultBuffer;
 }

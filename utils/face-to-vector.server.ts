@@ -1,5 +1,4 @@
 import {addon as ov} from "openvino-node";
-// @ts-ignore
 import sharp from "sharp";
 
 type CompiledModel = InstanceType<typeof ov.CompiledModel>;
@@ -29,15 +28,11 @@ export async function faceToVector(imageBuffer: Buffer): Promise<Float32Array> {
         const tensor = new ov.Tensor(ov.element.u8, inputShape, uint8Data);
         inferRequest.setInputTensor(tensor);
 
-        // 执行推理
         inferRequest.infer();
 
-        // 获取输出张量
         const outputTensor = inferRequest.getOutputTensor();
         const rawVector = outputTensor.data as Float32Array;
         const vector = l2Normalize(rawVector);
-        console.log("特征向量长度:", vector.length);
-        console.log("特征向量:", vector.slice(0, 10));
 
         return vector;
     } catch (error) {
@@ -57,12 +52,15 @@ function l2Normalize(features: Float32Array): Float32Array {
 }
 
 export async function getImageTensor(imageInput: Buffer): Promise<Uint8Array> {
-    const TARGET_SIZE = 112;
     const {data} = await sharp(imageInput)
-        .resize(TARGET_SIZE, TARGET_SIZE, {fit: 'fill'})
         .removeAlpha()
-        .toColorspace('srgb')
         .raw()
         .toBuffer({resolveWithObject: true});
+
+    if (data.length !== 112 * 112 * 3) {
+        throw new Error(`图像尺寸不正确: 期望 112x112x3=${112 * 112 * 3} 字节，实际 ${data.length} 字节`);
+    }
+
     return new Uint8Array(data);
 }
+

@@ -1,6 +1,8 @@
 import * as lancedb from "@lancedb/lancedb";
+import {join} from 'path';
 
-const DB_PATH = "../data/lancedb";
+const projectRoot = process.cwd();
+const DB_PATH = join(projectRoot, 'data', 'lancedb');
 const TABLE_NAME = "faces";
 
 let db: lancedb.Connection | null = null;
@@ -29,39 +31,28 @@ async function getOrCreateTable() {
     const connection = await initializeDB();
     const tables = await connection.tableNames();
 
-    if (tables.includes(TABLE_NAME)) table = await connection.openTable(TABLE_NAME); else {
+    if (tables.includes(TABLE_NAME)) {
+        table = await connection.openTable(TABLE_NAME);
+    } else {
         table = await connection.createTable(TABLE_NAME, [{name: "default", vector: Array(512).fill(0.0)}]);
         await table.delete("name = 'default'");
-        console.log('已创建新的空人脸数据表');
     }
 
     return table;
 }
 
-/**
- * 添加人脸数据
- * @param name 人名
- * @param vector 人脸向量
- */
 export async function addFace(name: string, vector: Float32Array | number[]) {
     try {
         const tbl = await getOrCreateTable();
         const vectorArray = Array.from(vector);
         await tbl.add([{name, vector: vectorArray}]);
-        console.log(`成功添加人脸数据: ${name}`);
     } catch (error) {
         console.error("添加人脸数据失败:", error);
         throw new Error(`Failed to add face data: ${error}`);
     }
 }
 
-/**
- * 搜索人脸数据
- * @param vector 人脸向量
- * @param limit 返回结果数量
- * @param threshold 匹配阈值
- */
-export async function searchFace(vector: Float32Array | number[], limit: number = 1, threshold: number = 0.8) {
+export async function searchFace(vector: Float32Array | number[], limit: number = 1, threshold: number = 0.5) {
     try {
         const tbl = await getOrCreateTable();
         const vectorArray = Array.from(vector);
@@ -72,14 +63,8 @@ export async function searchFace(vector: Float32Array | number[], limit: number 
 
         const filteredResults = results.filter((result: any) => {
             const distance = result._distance;
-            const isMatch = distance <= threshold;
-            console.log(`人名: ${result.name}, 距离: ${distance.toFixed(4)}, 匹配: ${isMatch}`);
-            return isMatch;
+            return distance <= threshold;
         });
-
-        if (filteredResults.length === 0) {
-            console.log("未找到匹配的人脸");
-        }
 
         return filteredResults;
     } catch (error) {
@@ -88,9 +73,6 @@ export async function searchFace(vector: Float32Array | number[], limit: number 
     }
 }
 
-/**
- * 获取所有身份人名
- */
 export async function getAllFacesName(): Promise<string[]> {
     try {
         const tbl = await getOrCreateTable();
@@ -102,15 +84,22 @@ export async function getAllFacesName(): Promise<string[]> {
     }
 }
 
-/**
- * 删除人脸数据
- * @param name 人名
- */
+export async function getFaceByName(name: string): Promise<FaceRecord | null> {
+    try {
+        const tbl = await getOrCreateTable();
+        const results = await tbl.query().toArray();
+        const record = results.find((r: FaceRecord) => r.name === name);
+        return record ? {name: record.name, vector: record.vector} : null;
+    } catch (error) {
+        console.error("根据人名获取人脸失败:", error);
+        throw new Error(`Failed to get face by name: ${error}`);
+    }
+}
+
 export async function deleteFace(name: string) {
     try {
         const tbl = await getOrCreateTable();
         await tbl.delete(`name = '${name}'`);
-        console.log(`成功删除人脸数据: ${name}`);
     } catch (error) {
         console.error("删除人脸数据失败:", error);
         throw new Error(`Failed to delete face data: ${error}`);
