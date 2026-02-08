@@ -251,10 +251,15 @@ onMounted(() => {
         <!-- 人脸列表 -->
         <div>
           <h3 class="text-sm font-medium mb-2">已有身份</h3>
-          <div v-if="loading" class="text-muted-foreground text-sm py-4">加载中…</div>
-          <ul v-else-if="faceList.length === 0" class="text-muted-foreground text-sm py-4">
-            暂无已录入人脸，请上传或拍照添加。
-          </ul>
+          <Alert v-if="loading" >
+            <Spinner class="animate-spin"/>
+            <AlertTitle>加载中</AlertTitle>
+          </Alert>
+          <Alert v-else-if="faceList.length === 0">
+            <AlertCircleIcon/>
+            <AlertTitle>暂无已录入人脸</AlertTitle>
+            <AlertDescription>请上传或拍照以添加人脸身份</AlertDescription>
+          </Alert>
           <ul v-else class="flex flex-col gap-2">
             <li
                 v-for="name in faceList"
