@@ -52,7 +52,7 @@ export async function addFace(name: string, vector: Float32Array | number[]) {
     }
 }
 
-export async function searchFace(vector: Float32Array | number[], limit: number = 1, threshold: number = 0.5) {
+export async function searchFace(vector: Float32Array | number[], limit: number = 1, threshold: number = 1) {
     try {
         const tbl = await getOrCreateTable();
         const vectorArray = Array.from(vector);

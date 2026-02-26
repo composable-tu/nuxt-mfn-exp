@@ -251,7 +251,7 @@ onMounted(() => {
         <!-- 人脸列表 -->
         <div>
           <h3 class="text-sm font-medium mb-2">已有身份</h3>
-          <Alert v-if="loading" >
+          <Alert v-if="loading">
             <Spinner class="animate-spin"/>
             <AlertTitle>加载中</AlertTitle>
           </Alert>
