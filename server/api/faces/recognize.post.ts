@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
     const imageBuffer = Buffer.from(base64, "base64");
     const aligned = await alignFace(imageBuffer, body.keypoints);
     const vector = await faceToVector(aligned);
-    const results = await searchFace(vector, 1, 1);
+    const results = await searchFace(vector, 1, 0.6);
     const name = results.length > 0 ? (results[0] as { name: string }).name : null;
     return {name};
 });

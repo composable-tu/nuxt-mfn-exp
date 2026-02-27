@@ -52,21 +52,17 @@ export async function addFace(name: string, vector: Float32Array | number[]) {
     }
 }
 
-export async function searchFace(vector: Float32Array | number[], limit: number = 1, threshold: number = 1) {
+export async function searchFace(vector: Float32Array | number[], limit: number = 1, threshold: number = 0.6) {
     try {
         const tbl = await getOrCreateTable();
         const vectorArray = Array.from(vector);
         const results = await tbl
             .vectorSearch(vectorArray)
+            .distanceType("cosine")
             .limit(limit)
             .toArray();
 
-        const filteredResults = results.filter((result: any) => {
-            const distance = result._distance;
-            return distance <= threshold;
-        });
-
-        return filteredResults;
+        return results.filter((result: any) => result._distance <= threshold);
     } catch (error) {
         console.error("搜索人脸失败:", error);
         throw new Error(`Failed to search face: ${error}`);
