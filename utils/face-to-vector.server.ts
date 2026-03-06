@@ -10,7 +10,7 @@ async function initializeModel() {
     try {
         const core = new ov.Core();
         const model = await core.readModel("models/openvino/model.xml");
-        compiledModel = await core.compileModel(model, "CPU");
+        compiledModel = await core.compileModel(model, "AUTO");
         return compiledModel;
     } catch (error) {
         console.error("模型加载失败:", error);

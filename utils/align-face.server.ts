@@ -3,7 +3,8 @@ import {cv} from 'opencv-wasm';
 
 const REFERENCE_PTS = [[38.2946, 51.6963], [73.5318, 51.5014], [56.0252, 71.7366], [56.1396, 92.2048]];
 
-const OUT_SIZE = 112;
+const OUT_SIZE_112 = 112;
+const ANTISPOOF_SIZE = 80;
 
 function getSimilarityTransformMatrix(srcPts: { x: number; y: number }[]) {
     const n = 4;
@@ -58,15 +59,25 @@ export async function alignFace(imageBuffer: Buffer, srcPts: { x: number; y: num
     const mArray = getSimilarityTransformMatrix(srcPts);
     const M = cv.matFromArray(2, 3, cv.CV_64F, mArray);
 
-    const dstMat = new cv.Mat();
-    const dsize = new cv.Size(OUT_SIZE, OUT_SIZE);
-
-    cv.warpAffine(srcMat, dstMat, M, dsize, cv.INTER_CUBIC, cv.BORDER_REPLICATE);
-
-    const resultRaw = Buffer.from(dstMat.data);
-    const resultBuffer = await sharp(resultRaw, {
+    const dsize112 = new cv.Size(OUT_SIZE_112, OUT_SIZE_112);
+    const dstMat112 = new cv.Mat();
+    cv.warpAffine(srcMat, dstMat112, M, dsize112, cv.INTER_CUBIC, cv.BORDER_REPLICATE);
+    const resultRaw112 = Buffer.from(dstMat112.data);
+    const resultBuffer112 = await sharp(resultRaw112, {
         raw: {
-            width: OUT_SIZE, height: OUT_SIZE, channels: 4
+            width: OUT_SIZE_112, height: OUT_SIZE_112, channels: 4
+        }
+    })
+        .png()
+        .toBuffer();
+
+    const dsize80 = new cv.Size(ANTISPOOF_SIZE, ANTISPOOF_SIZE);
+    const dstMat80 = new cv.Mat();
+    cv.warpAffine(srcMat, dstMat80, M, dsize80, cv.INTER_CUBIC, cv.BORDER_REPLICATE);
+    const resultRaw80 = Buffer.from(dstMat80.data);
+    const resultBuffer80 = await sharp(resultRaw80, {
+        raw: {
+            width: ANTISPOOF_SIZE, height: ANTISPOOF_SIZE, channels: 4
         }
     })
         .png()
@@ -74,7 +85,10 @@ export async function alignFace(imageBuffer: Buffer, srcPts: { x: number; y: num
 
     srcMat.delete();
     M.delete();
-    dstMat.delete();
+    dstMat112.delete();
+    dstMat80.delete();
 
-    return resultBuffer;
+    return {
+        size112: resultBuffer112, size80: resultBuffer80
+    };
 }

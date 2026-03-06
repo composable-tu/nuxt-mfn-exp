@@ -17,6 +17,7 @@ const canvasRef = ref<HTMLCanvasElement | null>(null);
 const streamRef = ref<MediaStream | null>(null);
 const isCameraOn = ref(false);
 const recognizeResult = ref<string | null>(null);
+const livenessConfidence = ref<number | null>(null);
 const recognizing = ref(false);
 let recognizeTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -37,6 +38,7 @@ async function startCamera() {
     }
     isCameraOn.value = true;
     recognizeResult.value = null;
+    livenessConfidence.value = null;
     startRecognizeLoop();
   } catch (e) {
     console.error(e);
@@ -56,6 +58,7 @@ function stopCamera() {
   if (videoRef.value) videoRef.value.srcObject = null;
   isCameraOn.value = false;
   recognizeResult.value = null;
+  livenessConfidence.value = null;
 }
 
 function startRecognizeLoop() {
@@ -81,13 +84,15 @@ function startRecognizeLoop() {
       });
       const keypoints = await detectFaceKeypoints(img);
       recognizing.value = true;
-      const {name} = await $fetch<{ name: string | null }>("/api/faces/recognize", {
+      const {name, isReal} = await $fetch<{ name: string | null; isReal: number }>("/api/faces/recognize", {
         method: "POST",
         body: {image: dataUrl, keypoints},
       });
       recognizeResult.value = name ?? "未识别";
+      livenessConfidence.value = isReal;
     } catch {
       recognizeResult.value = "未检测到人脸";
+      livenessConfidence.value = null;
     } finally {
       recognizing.value = false;
     }
@@ -146,7 +151,12 @@ onUnmounted(() => {
               "
                 class="inline-block px-3 py-1 rounded-md text-sm font-medium"
             >
-              {{ recognizeResult }}
+              <template v-if="livenessConfidence !== null">
+                {{ recognizeResult + "  |  活体置信度：" + (livenessConfidence * 100).toFixed(2) + "%" }}
+              </template>
+              <template v-else>
+                {{ recognizeResult }}
+              </template>
             </span>
           </div>
         </div>
