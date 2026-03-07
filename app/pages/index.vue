@@ -20,6 +20,7 @@ const recognizeResult = ref<string | null>(null);
 const livenessConfidence = ref<number | null>(null);
 const recognizing = ref(false);
 let recognizeTimer: ReturnType<typeof setInterval> | null = null;
+let isRunning = ref(false);
 
 function handleTabChange(value: string) {
   if (value === "manager") router.push("/manager");
@@ -51,6 +52,7 @@ function stopCamera() {
     clearInterval(recognizeTimer);
     recognizeTimer = null;
   }
+  isRunning.value = false;
   if (streamRef.value) {
     streamRef.value.getTracks().forEach((t) => t.stop());
     streamRef.value = null;
@@ -61,42 +63,54 @@ function stopCamera() {
   livenessConfidence.value = null;
 }
 
+async function runRecognitionCycle() {
+  if (!isRunning.value || !videoRef.value || !canvasRef.value || !streamRef.value) return;
+
+  const video = videoRef.value;
+  if (video.readyState < 2) {
+    setTimeout(runRecognitionCycle, 0);
+    return;
+  }
+
+  const canvas = canvasRef.value;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    setTimeout(runRecognitionCycle, 0);
+    return;
+  }
+
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  ctx.drawImage(video, 0, 0);
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("image load error"));
+      img.src = dataUrl;
+    });
+    const keypoints = await detectFaceKeypoints(img);
+    const {name, isReal} = await $fetch<{ name: string | null; isReal: number }>("/api/faces/recognize", {
+      method: "POST",
+      body: {image: dataUrl, keypoints},
+    });
+    recognizeResult.value = name ?? "未识别";
+    livenessConfidence.value = isReal;
+  } catch {
+    recognizeResult.value = "未检测到人脸";
+    livenessConfidence.value = null;
+  }
+
+  setTimeout(runRecognitionCycle, 0);
+}
+
 function startRecognizeLoop() {
-  if (recognizeTimer) return;
-  recognizeTimer = setInterval(async () => {
-    if (!videoRef.value || !canvasRef.value || recognizing.value || !streamRef.value) return;
-    const video = videoRef.value;
-    if (video.readyState < 2) return;
-    const canvas = canvasRef.value;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0);
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    try {
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error("image load error"));
-        img.src = dataUrl;
-      });
-      const keypoints = await detectFaceKeypoints(img);
-      recognizing.value = true;
-      const {name, isReal} = await $fetch<{ name: string | null; isReal: number }>("/api/faces/recognize", {
-        method: "POST",
-        body: {image: dataUrl, keypoints},
-      });
-      recognizeResult.value = name ?? "未识别";
-      livenessConfidence.value = isReal;
-    } catch {
-      recognizeResult.value = "未检测到人脸";
-      livenessConfidence.value = null;
-    } finally {
-      recognizing.value = false;
-    }
-  }, 800);
+  if (isRunning.value) return;
+  isRunning.value = true;
+  runRecognitionCycle();
 }
 
 onUnmounted(() => {

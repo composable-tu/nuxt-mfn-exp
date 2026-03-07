@@ -109,12 +109,13 @@ export async function faceAntiSpoofing(imageBuffer: Buffer): Promise<number> {
         const inputShape = [1, 3, 80, 80];
         const inputTensor = new ov.Tensor(ov.element.f32, inputShape, float32Data);
         inferRequest.setInputTensor(inputTensor);
-        await inferRequest.infer();
+        inferRequest.infer();
 
         const outputTensor = inferRequest.getOutputTensor();
         const outputData = outputTensor.data as Float32Array;
         const scores = Array.from(outputData);
-        return scores[1] ?? 0;
+        const score = (scores[1] - scores[0] - scores[2]) ?? 0;
+        return score > 0 ? score : 0;
     } catch (error) {
         console.error("活体检测失败:", error);
         throw new Error(`Face anti-spoofing failed: ${error}`);
